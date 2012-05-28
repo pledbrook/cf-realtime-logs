@@ -15,7 +15,13 @@ var http = require('http');
 var url = require('url');
 var fs = require('fs');
 var sockjs = require('sockjs');
-var context = require('rabbit.js').createContext('amqp://localhost:5672');
+var mongodb = require('mongodb');
+
+console.log("Connecting to RabbitMQ at " + rabbitUrl());
+
+var context = require('rabbit.js').createContext(rabbitUrl());
+var port = process.env.VCAP_APP_PORT || 8181
+
 
 // Create a web server on which we'll serve our demo page, and listen
 // for SockJS connections.
@@ -35,14 +41,70 @@ context.on('ready', function() {
     sub.on('data', function(msg) {
       // Push to SockJS.
       connection.write(msg);
+
+      // And Mongo.
+      storeLog(msg);
     });
   });
 
   // And finally, start the web server.
-  httpserver.listen(8181, '0.0.0.0');
+  httpserver.listen(port);
 });
 
 // ==== boring details
+function storeLog(msg) {
+  mongodb.connect(mongoUrl(), function(err, conn) {
+    conn.collection('logs', function(err, coll) {
+      coll.insert({ 'msg': msg }, { safe: true }, function(err) {
+        if (err) console.log("Failed to add log message to MongoDB: " + err);
+      });
+    });
+  });
+}
+
+function rabbitUrl() {
+  if (process.env.VCAP_SERVICES) {
+    conf = JSON.parse(process.env.VCAP_SERVICES);
+    return conf['rabbitmq-2.4'][0].credentials.url;
+  }
+  else {
+    return "amqp://localhost:5672";
+  }
+}
+
+function mongoUrl() {
+  var conf = mongoConf();
+
+  conf.hostname = (conf.hostname || 'localhost');
+  conf.port = (conf.port || 27017);
+  conf.db = (conf.db || 'test');
+
+  if (conf.username && conf.password) {
+    return "mongodb://" + conf.username +
+        ":" + conf.password + "@" + conf.hostname +
+        ":" + conf.port + "/" + conf.db;
+  }
+  else {
+    return "mongodb://" + conf.hostname + ":" + conf.port + "/" + conf.db;
+  }
+}
+
+function mongoConf() {
+  if (process.env.VCAP_SERVICES) {
+    var env = JSON.parse(process.env.VCAP_SERVICES);
+    return env['mongodb-1.8'][0]['credentials'];
+  }
+  else {
+    return {
+      "hostname":"localhost",
+      "port":27017,
+      "username":"",
+      "password":"",
+      "name":"",
+      "db":"db"
+    }
+  }
+}
 
 function handler(req, res) {
   var path = url.parse(req.url).pathname;
