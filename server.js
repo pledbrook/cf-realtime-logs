@@ -22,7 +22,6 @@ console.log("Connecting to RabbitMQ at " + rabbitUrl());
 var context = require('rabbit.js').createContext(rabbitUrl());
 var port = process.env.VCAP_APP_PORT || 8181
 
-
 // Create a web server on which we'll serve our demo page, and listen
 // for SockJS connections.
 var httpserver = http.createServer(handler);// Listen for SockJS connections
@@ -30,21 +29,22 @@ var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.2.min.js"};
 var sjs = sockjs.createServer(sockjs_opts);
 sjs.installHandlers(httpserver, {prefix: '[/]socks'});
 
+// Hook requesting sockets up
+sjs.on('connection', function(connection) {
+  addConnection(connection);
+});
+
 context.on('ready', function() {
   var sub = context.socket('SUB');
   sub.setEncoding('utf8');
   sub.connect({exchange: "amq.topic", pattern: "logs.#"});
 
-  // Hook requesting sockets up
-  sjs.on('connection', function(connection) {
-    // Respond to incoming requests
-    sub.on('data', function(msg) {
-      // Push to SockJS.
-      connection.write(msg);
-
-      // And Mongo.
+  sub.on('data', function(msg) {
+      // Store the message in MongoDB.
       storeLog(msg);
-    });
+
+      // and broadcast to all SockJS connections.
+      broadcast(msg);
   });
 
   // And finally, start the web server.
@@ -126,4 +126,22 @@ function send404(res) {
   res.writeHead(404);
   res.write('404');
   return res.end();
+}
+
+var sockets = [];
+
+function addConnection(connection) {
+  sockets.push(connection);
+  connection.on('close', function() {
+    var i = sockets.indexOf(connection);
+    if (i > -1) {
+      sockets.splice(i);
+    }
+  });
+}
+
+function broadcast(msg) {
+  for (var i = 0, len = sockets.length; i < len; i++) {
+    sockets[i].write(msg);
+  }
 }
