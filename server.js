@@ -138,7 +138,7 @@ function addConnection(connection) {
   connection.on('close', function() {
     var i = sockets.indexOf(connection);
     if (i > -1) {
-      sockets.splice(i);
+      sockets.splice(i, 1);
     }
   });
 }
