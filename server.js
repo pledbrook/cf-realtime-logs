@@ -25,7 +25,7 @@ var port = process.env.VCAP_APP_PORT || 8181
 // Create a web server on which we'll serve our demo page, and listen
 // for SockJS connections.
 var httpserver = http.createServer(handler);// Listen for SockJS connections
-var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.2.min.js"};
+var sockjs_opts = {sockjs_url: "http://cdn.sockjs.org/sockjs-0.2.min.js", websocket: false};
 var sjs = sockjs.createServer(sockjs_opts);
 sjs.installHandlers(httpserver, {prefix: '[/]socks'});
 
