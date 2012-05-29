@@ -34,6 +34,13 @@ sjs.on('connection', function(connection) {
   addConnection(connection);
 });
 
+var mongoCollection;
+mongodb.connect(mongoUrl(), function(err, conn) {
+  conn.collection('logs', function(err, coll) {
+    mongoCollection = coll;
+  });
+});
+
 context.on('ready', function() {
   var sub = context.socket('SUB');
   sub.setEncoding('utf8');
@@ -53,12 +60,8 @@ context.on('ready', function() {
 
 // ==== boring details
 function storeLog(msg) {
-  mongodb.connect(mongoUrl(), function(err, conn) {
-    conn.collection('logs', function(err, coll) {
-      coll.insert({ 'msg': msg }, { safe: true }, function(err) {
-        if (err) console.log("Failed to add log message to MongoDB: " + err);
-      });
-    });
+  mongoCollection.insert({ 'msg': msg }, { safe: true }, function(err) {
+    if (err) console.log("Failed to add log message to MongoDB: " + err);
   });
 }
 
